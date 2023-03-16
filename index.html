@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="utf-8">
+    <title>TP Julian Ibanez</title>
+    <link rel="icon" href="images/Troll Face.ico" type="icon">
+    <style>
+        body{
+            text-align: center;
+            font: Impact 14px bold;
+        }
+
+        canvas{
+            border: 2px black solid;
+        }
+
+        p{
+            width: 900px;
+            margin: 0 auto;
+            font-size: medium;
+            font-weight: bolder;
+        }
+    </style>
+</head>
+<body>
+    <h2>Malfaiteur à roulettes</h2>
+    <canvas width="900" height="600"></canvas>
+    <p>Essayez d'éviter les voitures qui apparaissent sur la route en utilisant les touches &leftarrow; &uparrow; &downarrow; &rightarrow; pour déplacer votre voiture!</p>
+
+    <script>
+        //Balise canvas et contexte en 2D
+        let leCanvas = document.querySelector("canvas");
+        let ctx = leCanvas.getContext("2d");
+
+        /* Objets */
+        let voitureJoeur = {
+            img: new Image(),
+            urlImage: "images/car2.png",
+            x: 0,
+            y: 0,
+            largeur: 50,
+            hauteur: 88,
+            vitesseX: 5,
+            vitesseY: 5,
+            nbVignette: 8,
+            indexVignette: 0,
+            sourceX: 0,
+        }
+
+        /* Charger l'image de la voiture */
+        voitureJoeur.img.src = voitureJoeur.urlImage;
+
+        /* tableau pour les autres voitures */
+        let lesVoitures = [];
+
+        //Tableau qui  contient les voitures
+
+        /* Positionner le joeur  */
+        voitureJoeur.x = leCanvas.width/2 - voitureJoeur.largeur/2;
+        voitureJoeur.y = leCanvas.height - voitureJoeur.hauteur/2;
+
+
+        //Variable des sons
+        let chansonJeu = new Audio("sons/chansonJeu.mp3");
+        let sonFinJeu = new Audio("sons/sonFinJeu.mp3");
+
+        /* Variable pour savoir si les fléches sont appuyées */
+        let fleches = {
+            haut: false,
+            bas: false,
+            droite: false,
+            gauche: false,
+        };
+
+        //Variable pour la fin du jeu
+        let finJeu = false;
+
+        /* Variable pour enregistrer le temps du joueur */
+        let temps = 0;
+
+        /* Variable pour augmenter la vitesse de toute les autres voitures */ 
+        let addVitesse = 0;
+
+        //Afficher l'intro
+        afficherIntro();
+        
+        //////////////////////////////////////////////////////////////////////////
+        //Gestionnaire des événements
+        document.addEventListener("keydown",commencerJeu);
+        /* Pour détecter si les touches de clavier sont appuyés */
+        document.addEventListener("keydown", presserTouche);
+        document.addEventListener("keyup", relacherTouche);
+        /* intervals */
+        let intervalTempsID;
+        let intervalJeuID;
+        let intervalImageVoiture;
+        let intervalVoitures;
+        let intervalVitesse;
+        //////////////////////////////////////////////////////////////////////////
+        
+        /* Fonctions */
+        /* Texte d'intro */
+        function afficherIntro(){
+            //Propiete de texte
+            ctx.font = "bold 36px Gill Sans"
+            ctx.textAlign = "center"
+            ctx.textBaseline = "bottom"
+            ctx.fillStyle = "white"
+            ctx.strokeStyle = "cyan"
+
+            //Point où le texte est placé
+            let textX = leCanvas.width/2;
+            let textY = leCanvas.height;  
+
+            //Affichage du texte
+            leCanvas.style.backgroundImage = "url('images/titleScreen.png')"
+            ctx.fillText("Appuyez sur la touche Entrée pour commencer le jeu!", textX, textY)
+            ctx.strokeText("Appuyez sur la touche Entrée pour commencer le jeu!", textX, textY)
+
+            afficherVoitures();
+
+        }
+        /* Commencer le jeu */
+        function commencerJeu(){
+            if(event.keyCode == 13){
+                /* Supprimer l'arrière-plan */
+                ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+                /* Afficher l'arrière-plan */
+                leCanvas.style.backgroundImage = "url('images/Background.png')";
+
+                /* Mise à jour du jeu, du compteur et l'animation du voiture */
+                intervalJeuID = setInterval(actualiserJeu, 1000/60); 
+                /* Mettre l'animation de la voiture */
+                intervalImageVoiture = setInterval(gererImageVoitureJoeur, 1000/12);
+                /* Enlever l'événement qui débute le jeu */
+                document.removeEventListener("keydown", commencerJeu);
+                /* Interval pour le compteur */
+                intervalTempsID = setInterval(compteTemp, 1000);
+                /* Interval pour sortir tout les voitures chaque seconde */
+                intervalVoitures = setInterval(afficherVoitures, 1000);
+                /* Chaque 15 secondes augmenter la vitesse de tout les voitures */
+                intervalVitesse = setInterval(plusVitesse, 15000)
+
+               /*  Jouer la chanson */
+                chansonJeu.play();
+            }
+        } 
+        /* Actualiser l'affichage */
+        function actualiserJeu(){
+            //Effacer le contenu actuel
+            ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+            /* Bouger la voiture du joeur */
+            bougerJoeur();
+            /* Afficher le compteur */
+            afficherTemps();
+            /* Faire bouger les voitures */
+            bougerVoitures();
+
+           /*  Boucle pour les collisions */
+            for(let uneVoiture of lesVoitures){
+                let siCollisionJoeurEtVoiture = detecterCollision(voitureJoeur, uneVoiture)
+                if(siCollisionJoeurEtVoiture == true){
+                    /* Si le joeur fait un collision avec un voiture le voiture va disparaitre */
+                    let ix = lesVoitures.indexOf(uneVoiture);
+                    lesVoitures.splice(ix, 1);
+                    /* Effacer le canvas pour mettre le image du game over */
+                    ctx.clearRect(0,0, leCanvas.width, leCanvas.height);
+                    leCanvas.style.backgroundImage = "url('images/finJeu.jpg')";
+                    /* Effacer tout les intervals */
+                    clearInterval(intervalJeuID);
+                    clearInterval(intervalImageVoiture);
+                    clearInterval(intervalTempsID);
+                    clearInterval(intervalVoitures);
+                    clearInterval(intervalVoitures);
+                    clearInterval(intervalVitesse);
+                    /* Arreter la chanson et mettre le son pour la fin du jeu */
+                    chansonJeu.pause();
+                    sonFinJeu.play();
+                    /* Mettre la variable de fin de jeu */
+                    finJeu = true;
+                    /* Indiquer avec le texte comment fair pour recommencer le jeu */
+                    afficherTexteFinDuJeu();
+                }
+            }    
+        }
+
+        /* fonction pour mettre le compteur */
+        function afficherTemps(){
+            //Dessiner le texte
+            //style du compteur
+            ctx.font = "Arial 60px";
+            ctx.fillStyle = "white";
+            ctx.strokeStyle = "cyan"
+            ctx.textAlign ="center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(temps, leCanvas.width* 0.05, leCanvas.height* 0.05);
+            ctx.strokeText(temps, leCanvas.width* 0.05, leCanvas.height* 0.05);
+        }
+
+        /* fonction pour commencer a compter */
+        function compteTemp(){
+            temps += 1;
+        }
+        /* fonction pour augmenter la vitesse du voitures */
+        function plusVitesse(){
+            addVitesse += 1  
+        }
+
+       /*  bouger le joeur sur l'axe de X et Y */
+        function bougerJoeur(){
+            /* Calculer les futures position du joeur */
+            if(fleches.haut){
+                voitureJoeur.y -= voitureJoeur.vitesseY;
+            }
+
+            if(fleches.bas){
+                voitureJoeur.y += voitureJoeur.vitesseY;
+            }
+            
+            if(fleches.droite){
+                voitureJoeur.x += voitureJoeur.vitesseX;
+            }
+
+            if(fleches.gauche){
+                voitureJoeur.x -= voitureJoeur.vitesseX;
+            }
+
+            /* Limite du canvas et limite de la rue */
+            /* Limite haut */
+            if(voitureJoeur.y < 0){
+                voitureJoeur.y = 0;
+            }
+
+            /* Limite bas */
+            let yMax = leCanvas.height - voitureJoeur.hauteur;
+            if(voitureJoeur.y > yMax){
+                voitureJoeur.y = yMax;
+            }
+
+            /* Limite de la rue à droite */
+            if(voitureJoeur.x > 653){
+                voitureJoeur.x = 653;
+            }
+            /* Limite de la rue à gauche */
+            if(voitureJoeur.x < 200){
+                voitureJoeur.x = 200;
+            }
+            //Déssiner l'animation du voiture
+            ctx.drawImage(voitureJoeur.img, voitureJoeur.sourceX, 0, voitureJoeur.largeur, voitureJoeur.hauteur, voitureJoeur.x, voitureJoeur.y, voitureJoeur.largeur, voitureJoeur.hauteur);
+        }
+
+        /* dessiner les voitures */
+        function afficherVoitures(){
+            /* Autres voitures */
+            let camion = {
+                img: new Image(),
+                urlImage: "images/truck.png",
+                x:entierRandom(200,658 - 100),
+                y:-40,
+                largeur:50,
+                hauteur:129,
+                vitesseY: 3 + addVitesse,
+                nom: "camion",
+            }
+            /* charger l'image */
+            camion.img.src = camion.urlImage;
+
+            let taxi = {
+                img: new Image(),
+                urlImage: "images/taxi.png",
+                x:entierRandom(200,658 - 100),
+                y:-40,
+                largeur:50,
+                hauteur:70,
+                vitesseY: 5 + addVitesse,
+                nom: "taxi",
+            }
+            /* charger l'image */
+            taxi.img.src = taxi.urlImage; 
+
+            let police = {
+                img:new Image(),
+                urlImage: "images/policecar.png",
+                x:voitureJoeur.x,
+                y:leCanvas.height,
+                largeur: 50,
+                hauteur: 80,
+                vitesseY: 6 + addVitesse,
+                nom: "police",
+            }
+            /* charger l'image */
+            police.img.src = police.urlImage;
+
+            let voiture = {
+                img: new Image(),
+                urlImage: "images/npcCar.png",
+                x:entierRandom(200,658 - 100) ,
+                y:-40,
+                largeur:50,
+                hauteur:70,
+                vitesseY: 4 + addVitesse,
+                nom: "voiture",
+            }
+            /* charger l'image */
+            voiture.img.src = voiture.urlImage; 
+
+            /* Faire un liste pour mettre les voitures dans un autre liste */
+            let autresVoitures = [voiture, camion, taxi, police];
+
+            /* Prendre un voiture au hasard pour l'afficher dans le jeu */
+            let i = entierRandom(0,3);
+            /* Apres 5 seconde on commence a mettre les voitures */
+            if(temps > 5){
+            lesVoitures.push(autresVoitures[i]);
+            }
+        }
+
+        /* mettre les voitures en mouvement */
+        function bougerVoitures(){
+            /* Apres 5 seconde on commence a mettre les voitures */
+            if(temps > 5){
+                for(let uneVoiture of lesVoitures){
+                    /* Si un voiture est la police on l'affiche apres 15 secondes pour rendre le jeu plus difficile  */
+                    if(uneVoiture.nom == "police" && temps > 15){
+                    uneVoiture.y -= uneVoiture.vitesseY;
+                    }else{
+                        uneVoiture.y += uneVoiture.vitesseY;
+                    }
+
+                    /* Dessiner les voitures */
+                    ctx.drawImage(uneVoiture.img, uneVoiture.x, uneVoiture.y);
+
+                    /* Si un voiture sorte du canvas l'effacer */
+                    if(uneVoiture.y > leCanvas.height){
+                        let index = lesVoitures.indexOf(uneVoiture);
+                        lesVoitures.splice(index,1);
+                    }
+                }
+            }
+        }
+
+        /* Generer un numero aleatoire */
+        function entierRandom(nombreMin, nombreMax){
+            let intervalle = nombreMax - nombreMin;
+                return nombreMin + Math.round(Math.random() * intervalle);
+        }
+
+        /* Dessiner l'image du joeur */
+        function gererImageVoitureJoeur(){
+            //Définir la coordonnée soruceX
+            voitureJoeur.sourceX = voitureJoeur.indexVignette * voitureJoeur.largeur;
+            //Incrémenter l'index 
+            voitureJoeur.indexVignette++;
+            if(voitureJoeur.indexVignette == voitureJoeur.nbVignette){
+                voitureJoeur.indexVignette = 0;
+            }
+        }
+
+       /*  Dessiner le texte pour la fin du jeu */
+        function afficherTexteFinDuJeu() {
+            ctx.font = "bold 36px Gill Sans"
+            ctx.textAlign = "center"
+            ctx.textBaseline = "bottom"
+            ctx.fillStyle = "white"
+            ctx.strokeStyle = "cyan"
+ 
+            //Point où le texte est placé
+            let textX = leCanvas.width/2;
+            let textY = leCanvas.height;  
+
+            //Affichage du texte
+            ctx.fillText("Appuyez sur la touche d'espace pour recommencer le jeu!", textX, textY)
+            ctx.strokeText("Appuyez sur la touche d'espace pour recommencer le jeu!", textX, textY)
+        }
+
+        /////////////////////////////////////////////////////////////////////////
+
+        /* Fonctions pour les touches */
+        function presserTouche(event){
+
+            event.preventDefault();
+            /* Enregistrer si les fleches sont enfoncee */
+            if(event.keyCode == 38){
+                //flèche haut
+                fleches.haut = true;
+            }
+
+            if(event.keyCode == 40){
+                //flèche bas
+                fleches.bas = true;
+            }
+
+            if(event.keyCode == 39){
+                //flèche droite
+                fleches.droite = true;
+            }
+
+            if(event.keyCode == 37){
+                //flèche gauche
+                fleches.gauche = true;
+            }
+
+            if(event.keyCode == 32 && finJeu == true)
+            document.location.reload();
+        }
+
+        function relacherTouche(event){
+
+            event.preventDefault();
+            /* Enregistrer si les fleches sont enfoncee */
+            if(event.keyCode == 38){
+                //flèche haut
+                fleches.haut = false;
+            }
+
+            if(event.keyCode == 40){
+                //flèche bas
+                fleches.bas = false;
+            }
+
+            if(event.keyCode == 39){
+                //flèche droite
+                fleches.droite = false;
+            }
+
+            if(event.keyCode == 37){
+                //flèche gauche
+                fleches.gauche = false;
+            }
+        }
+        //////////////////////////////////////////////////////////////////////
+
+        //Fonction pour détecter la collision entre 2 rectangles
+        function detecterCollision(rectangle1, rectangle2) {
+            if (
+            rectangle1.x < rectangle2.x + rectangle2.largeur &&
+            rectangle1.x + rectangle1.largeur > rectangle2.x &&
+            rectangle1.y < rectangle2.y + rectangle2.hauteur &&
+            rectangle1.y + rectangle1.hauteur > rectangle2.y
+            ) {
+            return true;
+            } else {
+            return false;
+            }
+        }
+    </script>
+</body>
+</html>
